@@ -19,7 +19,6 @@ class PromptInput(BaseModel):
     prompt: str
 
 class FunctionCallOutput(BaseModel):
-    """Validates the exact output format required by the subject."""
     prompt: str
-    name: str
-    parameters: Dict[str, Any]
+    fn_name: str
+    args: Dict[str, Any]

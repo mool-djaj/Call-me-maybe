@@ -77,11 +77,11 @@ def main() -> None:
             # Pass it through the final Pydantic struct to guarantee it meets 1337 specs
             final_result = FunctionCallOutput(
                 prompt=prompt_data.prompt,
-                name=parsed_data["name"],
-                parameters=parsed_data.get("parameters", {})
+                fn_name=parsed_data["name"],
+                args=parsed_data.get("parameters", {})
             )
             results.append(final_result)
-
+            
         # 5. Save the final payload to disk
         out_path = Path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)

@@ -6,34 +6,5 @@
             "a": 2,
             "b": 3
         }
-    },
-    {
-        "prompt": "What is the sum of 265 and 345?",
-        "fn_name": "fn_add_numbers",
-        "args": {
-            "a": 265,
-            "b": 345
-        }
-    },
-    {
-        "prompt": "Greet shrek",
-        "fn_name": "fn_greet",
-        "args": {
-            "name": "shrek"
-        }
-    },
-    {
-        "prompt": "Greet john",
-        "fn_name": "fn_greet",
-        "args": {
-            "name": "john"
-        }
-    },
-    {
-        "prompt": "Reverse the string 'hello'",
-        "fn_name": "fn_reverse_string",
-        "args": {
-            "s": "hello"
-        }
     }
 ]

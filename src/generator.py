@@ -1,9 +1,10 @@
 import numpy as np
 import json
 from typing import List
+from src.models import FunctionDef
 from src.state_machine import JSONStateMachine
 from src.token_utils import find_matching_token_ids, text_to_token_ids
-from src.models import FunctionDef
+
 
 def generate_constrained_json(model, prompt: str, functions: List[FunctionDef]) -> str:
     machine = JSONStateMachine(functions)

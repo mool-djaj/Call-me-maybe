@@ -1,0 +1,17 @@
+# Python Virtual Environments
+# .venv/
+# env/
+# venv/
+
+# Caches and Compiled Files
+__pycache__/
+*.pyc
+.mypy_cache/
+
+# Project Specific
+data/output/
+
+# OS and Editor Files
+.DS_Store
+.vscode/
+.idea/

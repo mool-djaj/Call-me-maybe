@@ -3,6 +3,8 @@
 install:
 	uv sync
 
+help:
+	uv run python3 -m src --help
 run:
 	uv run python3 -m src
 

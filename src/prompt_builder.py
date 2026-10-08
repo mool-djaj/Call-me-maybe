@@ -1,6 +1,6 @@
 import json
 
-from json_parser import FunctionDefinition, Prompt
+from .json_to_token import FunctionDefinition, Prompt
 
 
 def build_prompt(
@@ -19,5 +19,6 @@ Available functions:
 User request:
 {prompt.prompt}
 
-Return the function call as JSON:
+Choose the best function.
+Function name:
 """

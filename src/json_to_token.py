@@ -1,5 +1,5 @@
 import json
-
+from llm_sdk import Small_LLM_Model
 from pydantic import BaseModel, ValidationError
 
 
@@ -64,3 +64,14 @@ def load_prompts(path: str) -> list[Prompt]:
         raise ValueError(
             f"Invalid prompt: {error}"
         )
+
+
+def tokenize_function_names(functions: list[FunctionDefinition],model: Small_LLM_Model,) -> dict[str, list[int]]:
+    function_tokens = {}
+
+    for function in functions:
+        tokens = model.encode(function.name)[0].tolist()
+
+        function_tokens[function.name] = tokens
+
+    return function_tokens

@@ -1,72 +1,155 @@
-This project has been created as part of the 42 curriculum by akaarich.
+*This project has been created as part of the 42 curriculum by akaarich.*
+
+# Call Me Maybe
 
 ## Description
-**Call-me-bb** is a function calling tool that translates natural language prompts into strictly structured JSON function calls[cite: 1]. Large Language Models do not naturally produce reliable machine-executable output; this project bridges that gap[cite: 1]. By utilizing a technique called constrained decoding, the engine intercepts the token generation of the Qwen3-0.6B model and guarantees 100% schema-compliant JSON output without relying on generic prompting heuristics[cite: 1].
+
+Call Me Maybe converts a natural-language request into a typed function call using
+Qwen/Qwen3-0.6B through the supplied `llm_sdk`. **It does not execute functions**.
+The output is an array of JSON objects containing exactly `prompt`, `name`, and
+`parameters`, with no additional keys.
 
 ## Instructions
-The project relies on `uv` for strict dependency management[cite: 1].
 
-1. **Install dependencies:**
-   ```bash
-   make install
-   ```
-   *(This will run `uv sync` to lock and build the environment, including Pydantic, Numpy, and the necessary PyTorch/Transformers libraries).*
+Python 3.10+ and `uv` are required. From the repository root:
 
-2. **Run the Engine:**
-   ```bash
-   make run
-   ```
-   *(This executes `uv run python -m src` using the default input files in `data/input/`)[cite: 1].*
-
-3. **Run Code Quality Linters:**
-   ```bash
-   make lint
-   ```
-   *(Executes strict `flake8` and `mypy` typing checks)[cite: 1].*
-
-## Resources
-*   **Hugging Face Transformers Documentation:** Used for understanding causal LM generation and raw logit extraction.
-*   **Pydantic Documentation:** Used for implementing strict data validation structs.
-*   **AI Usage:** AI was utilized heavily as a sparring partner during development to conceptualize the negative infinity mask, debug PyTorch tensor formatting issues, troubleshoot the tokenizer's "space drift" behavior, and architect the dynamic wildcard state machine.
-
-## Algorithm Explanation
-The engine operates on a mathematically constrained decoding pipeline[cite: 1]. The architecture is divided into three components:
-1.  **The Rulebook (State Machine):** A Finite State Machine (FSM) tracks the exact required JSON schema syntax character-by-character.
-2.  **The Scanner:** It scans the model's entire 150k+ vocabulary and cross-references it with the Rulebook, returning only the Token IDs that perfectly match the required next string.
-3.  **The Interceptor:** Before the model selects its next token, the engine intercepts the raw probability scores (`logits`). It applies a Negative Infinity mask (`-np.inf`) to every invalid token. The model is mathematically forced to select from the remaining structurally valid tokens.
-
-## Design Decisions
-*   **Dynamic Pydantic Structs:** Instead of hardcoding JSON logic, the program parses the `functions_definition.json` into strict Pydantic structs[cite: 1]. The FSM dynamically reads these structs to enforce the correct argument keys (e.g., forcing `"a":` and `"b":` if `fn_add_numbers` is selected)[cite: 1].
-*   **Wildcard Mode vs. Exact Match:** The FSM uses exact string matching for JSON brackets and keys. However, for actual argument values, it shifts into "Wildcard Mode," allowing any digit or string token while actively monitoring for closing characters (`"` or `,`).
-*   **Context Injection:** The mathematical engine is fed the function descriptions as a prefix to the raw prompt. This gives the neural network the semantic context required to calculate accurate probabilities for the argument values rather than blindly hallucinating numbers.
-
-## Performance Analysis
-*   **Reliability:** The engine achieves 100% valid JSON output[cite: 1]. Because invalid structural tokens are mathematically blocked before generation, it is physically impossible for the model to output un-parseable JSON or missing keys[cite: 1].
-*   **Speed:** Utilizing the lightweight 0.6B parameter model, inference runs efficiently on local hardware[cite: 1].
-*   **Accuracy:** Function selection and argument extraction consistently hit near-perfect accuracy due to the injected prompt context[cite: 1].
-
-## Challenges Faced
-1.  **The Tokenizer "Space Drift":** Tokenizers use a special character to represent preceding spaces. Initially, the engine stripped spaces for comparison, which caused the FSM to silently accept partial string matches. This caused the state machine to desync and eventually crash. The solution was implementing mathematically exact prefix matching.
-2.  **Merged-Token Escape Hatches:** During wildcard generation (e.g., outputting a number), the AI would occasionally select a token that merged the value and the stop-character together (e.g., `"2,"`). The interceptor would catch the comma and drop the token, erasing the number from the final JSON. The scanner logic had to be patched to explicitly forbid merged tokens.
-3.  **String Quotes:** The interceptor was originally programmed to halt wildcard generation at the first sight of a quote (`"`). This instantly crashed string generation. The FSM was refactored to dynamically handle the insertion of opening and closing quotes directly.
-
-## Testing Strategy
-The implementation was validated using a multi-tiered approach:
-*   **Linters:** Ensuring strict typing and PEP-8 compliance using `mypy` and `flake8`[cite: 1].
-*   **Type Validation Tests:** Testing the robustness of the Pydantic models against malformed or missing input files[cite: 1].
-*   **Edge Case Prompts:** Testing prompts that require single integers, multi-digit integers, and string values (e.g., `fn_reverse_string`) to ensure the dynamic FSM and interceptor properly handled varying wildcard end-states[cite: 1].
-
-## Example Usage
-**Command:**
 ```bash
-uv run python -m src --functions_definition data/input/functions_definition.json --input data/input/function_calling_tests.json --output data/output/function_calling_results.json
+make install
+make run
 ```
 
-**Input Prompt:**
-`"What is the sum of 265 and 345?"`
+The first run may download Qwen weights (~1.5 GB). Subsequent runs normally use
+Hugging Face's cache. `make run` writes to `data/output/function_calls.json`.
 
-**Engine Console Output:**
-```text
-Processing prompt: 'What is the sum of 265 and 345?'
-Raw engine output: {"name":"fn_add_numbers","parameters":{"a":265,"b":345}}
+The mandatory command and custom paths:
+
+```bash
+uv run python -m src \
+  --functions_definition data/input/functions_definition.json \
+  --input data/input/function_calling_tests.json \
+  --output data/output/function_calls.json
+```
+
+For diagnostic function selection only:
+
+```bash
+uv run python -m src --select-only
+```
+
+Tests and style checks:
+
+```bash
+make test
+make lint
+make debug
+make clean
+```
+
+The `data/output/` folder is intentionally ignored by Git and is created on successful
+execution. If any request fails, the program exits nonzero and does not replace the
+existing output file.
+
+## Algorithm explanation
+
+1. Pydantic validates the supplied function definitions and input prompts.
+2. The model loads once; names are encoded once and kept in memory.
+3. For each request, the function-choice prompt is encoded. A prefix-matching
+   constrained decoder permits only token IDs continuing a supplied function name.
+   All other logits are masked to negative infinity before choosing the highest
+   remaining logit. When only one continuation is possible, model inference is
+   skipped for that token. If one name is a prefix of another, a newline
+   ending is also offered so the LLM can choose the shorter name.
+4. After choosing a function, parameter types determine which decoder is used:
+   - `number`: JSON-number state machine permits valid prefixes, including unfinished
+     minus signs, decimal points, and scientific notation. A delimiter ends the number
+     only from a complete state.
+   - `integer`: number-like constrained decoding disallowing fractions/exponents.
+   - `string`: a state machine permits valid JSON string contents and escapes;
+     an unescaped closing double quote ends the string. Candidate token sequences
+     are checked after decoding; the highest scoring valid token is selected.
+   - `boolean`: constrained selection between the tokenizations of `true` and `false`.
+5. Python constructs JSON keys and punctuation deterministically. It validates
+   the generated values against the selected function's schema, serializes with
+   `json.dump(..., allow_nan=False)`, reads the file back for verification, and
+   atomically replaces the requested output file.
+
+The LLM chooses the function and argument values. Python only constrains the
+allowed form and constructs the final JSON structure.
+
+## Design decisions
+
+- Uses the supplied public `llm_sdk` methods only: `encode`, `decode`,
+  `get_logits_from_input_ids`, and `get_path_to_vocab_file`.
+- Does not import PyTorch, Transformers, Outlines or DSPy in project implementation.
+  The **provided SDK itself** imports dependencies necessary for model execution.
+- No regex is needed for partial number or JSON-string recognition.
+- Function names and vocabulary are cached in memory for all input prompts.
+- Limits generation length so malformed outputs cannot loop indefinitely.
+- Unsupported schema types raise a descriptive error instead of silently fabricating
+  invalid JSON; nested arrays/objects are not implemented (optional bonus work).
+
+## Testing strategy
+
+Run `make test` for fast model-free unit tests of validators, masking, decoding,
+JSON schema checks, and file output. Run `make run` for actual Qwen integration.
+Include cases with multi-digit and negative numbers, decimals/exponents, empty
+strings, escaped quotation marks, boolean values, and different function sets.
+
+Note: tests with the supplied five demo prompts are a smoke test, **not proof of
+90%+ accuracy on unseen requests**. Test a larger labeled input set to calculate
+selection/argument accuracy and time. Performance depends strongly on CPU/GPU
+and the number/length of requests, so no unmeasured benchmark is claimed.
+
+## Performance analysis
+
+The main latency comes from `get_logits_from_input_ids`, not from `encode`.
+Function-name tokens and the vocabulary are computed/loaded once. The decoder
+skips inference on unambiguous function-name continuations. The supplied SDK
+re-evaluates the prompt on each next-token call, so processing lengthy strings
+may be expensive. Measure runtime against the subject's five-minute requirement
+on the evaluation machine.
+
+## Challenges faced
+
+- Unconstrained generation produced non-JSON text and even attempted to answer
+  the request rather than emit a function call. Masking fixed structural choices.
+- Partial numbers such as `-` and `3.` must not be rejected before completion;
+  the state machine keeps valid prefixes rather than checking only finished numbers.
+- Extracting the second argument required including previously generated arguments
+  in the prompt.
+- String parameters need special handling of closing quotes and escape sequences.
+
+## Example usage
+
+Input request: `What is the sum of 2 and 3?`
+
+```json
+{
+  "prompt": "What is the sum of 2 and 3?",
+  "name": "fn_add_numbers",
+  "parameters": {"a": 2, "b": 3}
+}
+```
+
+## Resources and AI use
+
+- Project subject, *Call Me Maybe*, v1.7.
+- Python `json` documentation: https://docs.python.org/3/library/json.html
+- Python `argparse` documentation: https://docs.python.org/3/library/argparse.html
+- Pydantic documentation: https://docs.pydantic.dev/
+- Hugging Face tokenizer documentation: https://huggingface.co/docs/transformers/main_classes/tokenizer
+- AI was used to explain tokenization, logarithmic scores/logit masking,
+  build prototypes and test fixtures, and help draft documentation. The final
+  implementation should be understood, manually reviewed, and checked by peers.
+
+### Optional additional type smoke test
+
+A separate demonstration input set is in `data/examples/`. Its results are not
+claimed as verified Qwen outputs. Run it with:
+
+```bash
+uv run python -m src \
+  --functions_definition data/examples/functions_definition.json \
+  --input data/examples/function_calling_tests.json \
+  --output data/output/examples.json
 ```

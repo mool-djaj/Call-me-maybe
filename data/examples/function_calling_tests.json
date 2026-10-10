@@ -1,0 +1,6 @@
+[
+  {"prompt": "Enable the feature."},
+  {"prompt": "Disable the feature."},
+  {"prompt": "Set the count to 17."},
+  {"prompt": "Set the temperature to -12.5 Celsius."}
+]

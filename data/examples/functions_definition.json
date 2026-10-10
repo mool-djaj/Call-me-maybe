@@ -1,0 +1,20 @@
+[
+  {
+    "name": "fn_set_flag",
+    "description": "Enable or disable a feature based on a user's request.",
+    "parameters": {"enabled": {"type": "boolean"}},
+    "returns": {"type": "boolean"}
+  },
+  {
+    "name": "fn_set_count",
+    "description": "Set an integer count requested by the user.",
+    "parameters": {"count": {"type": "integer"}},
+    "returns": {"type": "integer"}
+  },
+  {
+    "name": "fn_set_temperature",
+    "description": "Store a numeric temperature in degrees Celsius.",
+    "parameters": {"temperature": {"type": "number"}},
+    "returns": {"type": "number"}
+  }
+]

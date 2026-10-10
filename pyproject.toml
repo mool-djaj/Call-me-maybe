@@ -15,3 +15,5 @@ dev = [
     "flake8",
     "mypy"
 ]
+[tool.mypy]
+exclude = "(^llm_sdk/|^tests/)"

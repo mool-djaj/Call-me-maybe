@@ -1,9 +1,7 @@
-"""Load and validate function definitions and user prompts."""
-
 import json
 from pathlib import Path
 
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 

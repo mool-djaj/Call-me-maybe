@@ -8,13 +8,58 @@ from .json_to_token import FunctionDefinition, Prompt
 def build_prompt(
     functions: list[FunctionDefinition], prompt: Prompt
 ) -> str:
-    """Present candidate functions and request one function name."""
-    definitions = [function.model_dump() for function in functions]
+    """Choose by the requested operation, not merely shared input types."""
+    catalog: list[str] = []
+    has_fallback = False
+
+    for function in functions:
+        if function.name == "fn_unknown":
+            has_fallback = True
+            continue
+
+        parameters = ", ".join(
+            f"{name}: {definition.type}"
+            for name, definition in function.parameters.items()
+        ) or "none"
+
+        catalog.append(
+            f"{function.name}\n"
+            f"  Action: {function.description}\n"
+            f"  Inputs: {parameters}\n"
+            f"  Result type: {function.returns.type}"
+        )
+
+    if has_fallback:
+        catalog.append(
+            "fn_unknown\n"
+            "  Action: No listed function can perform the requested action."
+        )
+
+    instructions = (
+        "You are a precise function selector. Do not execute functions.\n"
+        "Identify the action and the result the user wants.\n"
+        "Compare this action to what each function actually does.\n"
+        "Different words for the same action are a match.\n"
+        "Related subjects, similar inputs, or matching parameter types "
+        "are NOT enough.\n"
+        "Never replace the requested action with a different action.\n"
+    )
+
+    if has_fallback:
+        instructions += (
+            "Choose a real function whenever it can do the full task.\n"
+            "Otherwise choose fn_unknown; do not guess a related tool.\n"
+        )
+
+    catalog_text = "\n\n".join(catalog)
     return (
+        f"{instructions}\n"
         "Available functions:\n"
-        f"{json.dumps(definitions, ensure_ascii=False, indent=2)}\n\n"
+        f"{catalog_text}\n\n"
         f"User request:\n{prompt.prompt}\n\n"
-        "Choose the best function.\nFunction name:"
+        "Select by the requested ACTION, not the input words.\n"
+        "Return exactly one function name from the list, nothing else.\n"
+        "Function name:"
     )
 
 

@@ -1,10 +1,8 @@
-"""Load the vocabulary file exposed by the public LLM SDK."""
-
 import json
 from pathlib import Path
 from typing import cast
 
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
 
 
 def load_vocab(model: Small_LLM_Model) -> dict[str, int]:

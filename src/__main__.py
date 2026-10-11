@@ -6,7 +6,7 @@ import math
 import sys
 from pathlib import Path
 
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
 
 from .decoder import (
     decode_number,
@@ -22,11 +22,45 @@ from .json_to_token import (
     load_prompts,
     tokenize_function_names,
 )
-from .prompt_builder import build_parameter_prompt, build_prompt
+from .prompt_builder import (
+    build_parameter_prompt,
+    build_prompt,
+)
 from .vocab import load_vocab
 
 
 ParameterValue = int | float | str | bool
+FALLBACK_NAME = "fn_unknown"
+
+
+def adjust_fallback_score(
+    masked: list[float],
+    generated: list[int],
+    function_tokens: dict[str, list[int]],
+    penalty: float,
+) -> None:
+    """Apply a prior penalty at a branch unique to the fallback."""
+    fallback_tokens = function_tokens.get(FALLBACK_NAME)
+    if fallback_tokens is None:
+        return
+
+    n = len(generated)
+    if len(fallback_tokens) <= n or fallback_tokens[:n] != generated:
+        return
+
+    fallback_next = fallback_tokens[n]
+    real_choices = {
+        tokens[n]
+        for name, tokens in function_tokens.items()
+        if name != FALLBACK_NAME
+        and len(tokens) > n
+        and tokens[:n] == generated
+    }
+
+    # Penalize only when another real candidate is available,
+    # and the fallback has its own distinct continuation token.
+    if real_choices and fallback_next not in real_choices:
+        masked[fallback_next] -= penalty
 
 
 def select_function(
@@ -34,6 +68,8 @@ def select_function(
     functions: list[FunctionDefinition],
     prompt: Prompt,
     function_tokens: dict[str, list[int]],
+    debug: bool = False,
+    fallback_penalty: float = 0.0,
 ) -> str:
     """Select a function using constrained next-token decoding."""
     text = build_prompt(functions, prompt)
@@ -66,7 +102,30 @@ def select_function(
             continue
 
         logits = model.get_logits_from_input_ids(input_ids + generated)
+
         masked = mask_logits(logits, allowed_ids)
+        adjust_fallback_score(
+            masked, generated, function_tokens, fallback_penalty
+        )
+
+        if debug:
+            print(f"  Selection prefix: {model.decode(generated)!r}")
+            for token_id in allowed_ids:
+                candidates = [
+                    name
+                    for name, ids in function_tokens.items()
+                    if len(ids) > len(generated)
+                    and ids[:len(generated)] == generated
+                    and ids[len(generated)] == token_id
+                ]
+                if completed and token_id == end_id:
+                    candidates = completed
+                print(
+                    f"    token {token_id}: {logits[token_id]:.3f} "
+                    f"(adjusted {masked[token_id]:.3f}) "
+                    f"-> {', '.join(candidates)}"
+                )
+
         next_id = max(allowed_ids, key=lambda token_id: masked[token_id])
         if completed and next_id == end_id:
             return completed[0]
@@ -85,6 +144,8 @@ def extract_parameters(
 
     for index, (name, definition) in enumerate(items):
         text = build_parameter_prompt(function, prompt, name, parameters)
+
+        value: ParameterValue
 
         if definition.type in ("number", "integer"):
             is_last = index == len(items) - 1
@@ -134,7 +195,9 @@ def validate_result(
             if type(value) is not bool:
                 raise ValueError(f"Parameter {name!r} must be a boolean")
         else:
-            raise ValueError(f"Unsupported parameter type: {definition.type!r}")
+            raise ValueError(
+                f"Unsupported parameter type: {definition.type!r}"
+            )
 
     return {
         "prompt": prompt.prompt,
@@ -184,9 +247,21 @@ def main() -> int:
         "--select-only", action="store_true",
         help="Only test function selection; do not create output JSON",
     )
+    parser.add_argument(
+        "--debug-selection", action="store_true",
+        help="Print the model's allowed function-token scores",
+    )
+    parser.add_argument(
+        "--fallback-penalty", type=float, default=1.25,
+        help="Experimental logit penalty for fn_unknown (default 1.25)",
+    )
     args = parser.parse_args()
 
     try:
+        if not math.isfinite(args.fallback_penalty):
+            raise ValueError("Fallback penalty must be finite")
+        if args.fallback_penalty < 0:
+            raise ValueError("Fallback penalty must not be negative")
         functions = load_functions(args.functions_definition)
         prompts = load_prompts(args.input)
 
@@ -195,8 +270,20 @@ def main() -> int:
         if len({function.name for function in functions}) != len(functions):
             raise ValueError("Function names must be unique")
 
+        # Keep the fallback separate from the user-provided definitions.
+        # It is only a candidate for internal function selection.
+        if any(function.name == FALLBACK_NAME for function in functions):
+            raise ValueError("Reserved function name: fn_unknown")
+
+        fallback = load_functions("data/input/fallback_function.json")
+        if len(fallback) != 1 or fallback[0].name != FALLBACK_NAME:
+            raise ValueError("Fallback file must contain only fn_unknown")
+        if fallback[0].parameters:
+            raise ValueError("fn_unknown must not have parameters")
+
+        selection_functions = functions + fallback
         model = Small_LLM_Model()
-        function_tokens = tokenize_function_names(functions, model)
+        function_tokens = tokenize_function_names(selection_functions, model)
         functions_by_name = {function.name: function for function in functions}
         vocab = {} if args.select_only else load_vocab(model)
 
@@ -207,14 +294,20 @@ def main() -> int:
             print(f"\n[{index}/{len(prompts)}] {prompt.prompt}")
             try:
                 selected_name = select_function(
-                    model, functions, prompt, function_tokens
+                    model, selection_functions, prompt, function_tokens,
+                    debug=args.debug_selection,
+                    fallback_penalty=args.fallback_penalty,
                 )
+                if selected_name == FALLBACK_NAME:
+                    raise ValueError(
+                        "No matching function available for this request"
+                    )
+                selected_function = functions_by_name[selected_name]
                 print(f"  Function: {selected_name}")
 
                 if args.select_only:
                     continue
 
-                selected_function = functions_by_name[selected_name]
                 parameters = extract_parameters(
                     model, selected_function, prompt, vocab
                 )
@@ -223,13 +316,21 @@ def main() -> int:
                 )
                 results.append(result)
                 print("  Schema: valid")
-            except (ValueError, TypeError, OverflowError, RuntimeError) as error:
+            except (
+                ValueError,
+                TypeError,
+                OverflowError,
+                RuntimeError,
+            ) as error:
                 failures += 1
                 print(f"  Failed: {error}", file=sys.stderr)
 
         print(f"\nCompleted: {len(prompts) - failures}/{len(prompts)}")
         if failures:
-            print("No new output was written; previous output may still exist.")
+            if not args.select_only:
+                # Prevent an old result from masquerading as this run's output.
+                Path(args.output).unlink(missing_ok=True)
+            print("No JSON output saved because some prompts failed.")
             return 1
 
         if args.select_only:
@@ -239,7 +340,13 @@ def main() -> int:
         save_results(args.output, results)
         return 0
 
-    except (OSError, ValueError, TypeError, RuntimeError, OverflowError) as error:
+    except (
+        OSError,
+        ValueError,
+        TypeError,
+        RuntimeError,
+        OverflowError,
+    ) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
 

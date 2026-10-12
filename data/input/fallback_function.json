@@ -1,0 +1,10 @@
+[
+	{
+	  "name": "fn_unknown",
+	  "description": "Fallback for a user request that none of the other available functions can perform. Select only when no listed function matches the requested operation.",
+	  "parameters": {},
+	  "returns": {
+		"type": "string"
+	  }
+	}
+  ]

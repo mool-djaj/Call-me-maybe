@@ -32,6 +32,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     """Select functions, extract arguments, and save valid calls."""
+    import time
+    start = time.perf_counter()
     args = parse_args()
     try:
         if not math.isfinite(args.fallback_penalty):
@@ -81,6 +83,7 @@ def main() -> int:
                 print(f"  Failed: {error}", file=sys.stderr)
 
         print(f"\nCompleted: {len(prompts) - failures}/{len(prompts)}")
+        print(f"time={(time.perf_counter() - start) / 60} in min")
         if failures:
             if not args.select_only:
                 Path(args.output).unlink(missing_ok=True)
@@ -98,6 +101,7 @@ def main() -> int:
     ) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
+	
 
 
 if __name__ == "__main__":

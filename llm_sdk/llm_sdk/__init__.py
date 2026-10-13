@@ -1,6 +1,3 @@
-# flake8: noqa
-# type: ignore
-
 # ABOUTME: LLM SDK for local model inference using Hugging Face transformers.
 # ABOUTME: Provides Small_LLM_Model class for loading and running causal language models.
 

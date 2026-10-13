@@ -79,6 +79,8 @@ def tokenize_function_names(
     for function in functions:
         ids: list[int] = model.encode(function.name)[0].tolist()
         if not ids or model.decode(ids) != function.name:
-            raise ValueError(f"Could not encode function name {function.name!r}")
+            raise ValueError(
+                f"Could not encode function name {function.name!r}"
+                )
         tokens[function.name] = ids
     return tokens

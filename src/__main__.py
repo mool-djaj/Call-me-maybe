@@ -3,10 +3,9 @@
 import argparse
 import math
 import sys
+import time
 from pathlib import Path
-
 from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
-
 from .function_call import extract_parameters, save_results, validate_result
 from .function_selector import FALLBACK_NAME, load_candidates, select_function
 from .json_to_token import load_prompts, tokenize_function_names
@@ -32,7 +31,6 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     """Select functions, extract arguments, and save valid calls."""
-    import time
     start = time.perf_counter()
     args = parse_args()
     try:
@@ -84,16 +82,20 @@ def main() -> int:
 
         print(f"\nCompleted: {len(prompts) - failures}/{len(prompts)}")
         print(f"time={(time.perf_counter() - start) / 60} in min")
-        if failures:
-            if not args.select_only:
-                Path(args.output).unlink(missing_ok=True)
-            print("No JSON output saved because some prompts failed.")
-            return 1
-        if args.select_only:
-            print("Selection-only test complete; no JSON file written.")
-            return 0
 
-        save_results(args.output, results)
+        if args.select_only:
+            print("Selection-only test complete.")
+            return 1 if failures else 0
+
+        if results:
+            save_results(args.output, results)
+        else:
+            Path(args.output).unlink(missing_ok=True)
+
+        if failures:
+            print(f"{failures} prompts failed and were not saved.")
+            return 1
+
         return 0
 
     except (
@@ -101,7 +103,6 @@ def main() -> int:
     ) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
-	
 
 
 if __name__ == "__main__":

@@ -86,9 +86,22 @@ def build_parameter_prompt(
     special_instruction = ""
     if field_type == "string":
         special_instruction = (
-            "Preserve the spelling and letter case of quoted or named "
-            "text in the request.\n"
+            "Extract only the requested string value.\n"
+            "Preserve the original spelling, capitalization, "
+            "spaces, and special characters exactly.\n"
+            "Do not capitalize names automatically.\n"
         )
+
+    elif "regex" in param_name.lower() or "pattern" in param_name.lower():
+        special_instruction += (
+                    "Generate a valid, concise regular expression.\n"
+                    "Match only the text that needs replacing.\n"
+                    "Do not match the entire sentence unnecessarily.\n"
+                    "Use character classes or word"
+                    " boundaries when appropriate.\n"
+                    "Avoid unnecessary repetitions and extra characters.\n"
+            )
+
     elif field_type == "boolean":
         special_instruction = "Use only JSON true or false.\n"
 

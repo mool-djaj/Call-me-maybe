@@ -29,14 +29,21 @@ def extract_parameters(
 
         if definition.type in ("number", "integer"):
             ending = ")" if index == len(items) - 1 else ","
+
             value = decode_number(
                 model, text, vocab, ending,
                 integer_only=definition.type == "integer",
             )
+
+            if definition.type == "number":
+                value = float(value)
+
         elif definition.type == "string":
             value = decode_string(model, text, vocab)
+
         elif definition.type == "boolean":
             value = decode_boolean(model, text)
+
         else:
             raise ValueError(
                 f"Unsupported parameter type {definition.type!r} "

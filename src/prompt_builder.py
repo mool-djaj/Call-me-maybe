@@ -1,5 +1,3 @@
-"""Build contexts for model-guided function and parameter extraction."""
-
 import json
 
 from .json_to_token import FunctionDefinition, Prompt

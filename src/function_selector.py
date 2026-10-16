@@ -1,5 +1,3 @@
-"""Load candidate functions and select one with constrained decoding."""
-
 from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
 
 from .decoder import get_allowed_next_ids, mask_logits

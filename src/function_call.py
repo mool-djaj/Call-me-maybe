@@ -1,5 +1,3 @@
-"""Extract typed arguments, validate results, and save JSON output."""
-
 import json
 import math
 from pathlib import Path

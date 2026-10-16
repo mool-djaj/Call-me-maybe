@@ -1,5 +1,3 @@
-"""CLI entry point for constrained function calling."""
-
 import argparse
 import math
 import sys

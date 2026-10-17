@@ -1,8 +1,7 @@
+import heapq
 import json
 import math
-
 from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
-
 from .data_type_validator import (
     get_allowed_number_ids,
     validate_number,
@@ -86,16 +85,29 @@ def decode_number(
     raise ValueError("Number generation exceeded 40 tokens")
 
 
+def completed_json_string(text: str) -> str | None:
+    """Read a closed JSON string, including tokens ending with `",`."""
+    try:
+        value, end = json.JSONDecoder().raw_decode('"' + text)
+    except json.JSONDecodeError:
+        return None
+
+    # The opening quote was supplied in the prompt, not generated.
+    rest = text[end - 1:].lstrip()
+    if rest and rest[0] not in ',)}]':
+        return None
+    return value if isinstance(value, str) else None
+
+
 def decode_string(
     model: Small_LLM_Model,
     prompt: str,
     vocab: dict[str, int],
 ) -> str:
-    """Generate JSON string content until a valid closing quote.
+    """Greedily generate valid JSON string content up to a closing quote.
 
-    Checking candidates in descending logit order is equivalent to
-    greedy selection after masking invalid candidates to -infinity.
-    It avoids decoding the whole vocabulary on every generation step.
+    The tokenizer may include a comma or closing parenthesis in the same
+    token as the final quote. That token still finishes the string.
     """
     input_ids = model.encode(prompt)[0].tolist()
     known_token_ids = set(vocab.values())
@@ -105,33 +117,54 @@ def decode_string(
         logits = model.get_logits_from_input_ids(input_ids + generated)
         current_text = model.decode(generated)
 
-        # Try the highest scoring candidate first; reject invalid tokens.
-        ranked_ids = sorted(
-            range(len(logits)), key=logits.__getitem__, reverse=True
+        # The top candidate is usually valid. Do not decode all 150k tokens.
+        ranked_ids = heapq.nlargest(
+            256, range(len(logits)), key=logits.__getitem__
         )
 
         for token_id in ranked_ids:
             if token_id not in known_token_ids:
                 continue
-
-            candidate_ids = generated + [token_id]
-            candidate_text = model.decode(candidate_ids)
+            candidate_text = model.decode(generated + [token_id])
             if candidate_text == current_text:
                 continue
 
-            status = validate_string_content(candidate_text)
-            if status == "invalid":
+            # A token such as '", regex=' contains an ending quote plus
+            # additional function-call text: stop at the quote.
+            finished = completed_json_string(candidate_text)
+            if finished is not None:
+                return finished
+
+            if validate_string_content(candidate_text) == 'invalid':
                 continue
 
             generated.append(token_id)
-            if status == "complete":
-                return str(json.loads('"' + candidate_text))
-
             break
         else:
-            raise ValueError("No valid string continuation")
+            # Rare fallback when no top-256 candidate is usable.
+            all_ids = sorted(
+                range(len(logits)), key=logits.__getitem__, reverse=True
+            )
+            for token_id in all_ids[256:]:
+                if token_id not in known_token_ids:
+                    continue
+                candidate_text = model.decode(generated + [token_id])
+                finished = completed_json_string(candidate_text)
+                if finished is not None:
+                    return finished
+                if (
+                    candidate_text != current_text
+                    and validate_string_content(candidate_text) != 'invalid'
+                ):
+                    generated.append(token_id)
+                    break
+            else:
+                raise ValueError('No valid string continuation')
 
-    raise ValueError("String generation exceeded 64 tokens")
+    raise ValueError(
+        'String generation exceeded 64 tokens: '
+        f'{model.decode(generated)[-160:]!r}'
+    )
 
 
 def decode_boolean(model: Small_LLM_Model, prompt: str) -> bool:

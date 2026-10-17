@@ -1,5 +1,4 @@
 import argparse
-import math
 import sys
 import time
 from pathlib import Path
@@ -11,7 +10,7 @@ from .vocab import load_vocab
 
 
 def parse_args() -> argparse.Namespace:
-    """Read input/output paths and selection options."""
+    """Read required and optional input/output paths."""
     parser = argparse.ArgumentParser(description="Constrained function caller")
     parser.add_argument(
         "--functions_definition",
@@ -21,9 +20,6 @@ def parse_args() -> argparse.Namespace:
         "--input", default="data/input/function_calling_tests.json"
     )
     parser.add_argument("--output", default="data/output/function_calls.json")
-    parser.add_argument("--select-only", action="store_true")
-    parser.add_argument("--debug-selection", action="store_true")
-    parser.add_argument("--fallback-penalty", type=float, default=1.25)
     return parser.parse_args()
 
 
@@ -32,16 +28,11 @@ def main() -> int:
     start = time.perf_counter()
     args = parse_args()
     try:
-        if not math.isfinite(args.fallback_penalty):
-            raise ValueError("Fallback penalty must be finite")
-        if args.fallback_penalty < 0:
-            raise ValueError("Fallback penalty must not be negative")
-
         functions, by_name = load_candidates(args.functions_definition)
         prompts = load_prompts(args.input)
         model = Small_LLM_Model()
         function_tokens = tokenize_function_names(functions, model)
-        vocab = {} if args.select_only else load_vocab(model)
+        vocab = load_vocab(model)
         results: list[dict[str, object]] = []
         failures = 0
 
@@ -52,9 +43,7 @@ def main() -> int:
                     raise ValueError("Empty user request")
 
                 name = select_function(
-                    model, functions, prompt, function_tokens,
-                    debug=args.debug_selection,
-                    fallback_penalty=args.fallback_penalty,
+                    model, functions, prompt, function_tokens
                 )
                 if name == FALLBACK_NAME:
                     raise ValueError(
@@ -63,14 +52,13 @@ def main() -> int:
 
                 function = by_name[name]
                 print(f"  Function: {name}")
-                if not args.select_only:
-                    parameters = extract_parameters(
-                        model, function, prompt, vocab
-                    )
-                    results.append(
-                        validate_result(prompt, function, parameters)
-                    )
-                    print("  Schema: valid")
+                parameters = extract_parameters(
+                    model, function, prompt, vocab
+                )
+                results.append(
+                    validate_result(prompt, function, parameters)
+                )
+                print("  Schema: valid")
 
             except (
                 ValueError, TypeError, OverflowError, RuntimeError
@@ -80,10 +68,6 @@ def main() -> int:
 
         print(f"\nCompleted: {len(prompts) - failures}/{len(prompts)}")
         print(f"time={(time.perf_counter() - start) / 60} in min")
-
-        if args.select_only:
-            print("Selection-only test complete.")
-            return 1 if failures else 0
 
         if results:
             save_results(args.output, results)

@@ -1,10 +1,10 @@
 from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
-
 from .decoder import get_allowed_next_ids, mask_logits
 from .json_to_token import FunctionDefinition, Prompt, load_functions
 from .prompt_builder import build_prompt
 
 FALLBACK_NAME = "fn_unknown"
+FALLBACK_PENALTY = 2.5
 
 
 def load_candidates(
@@ -29,7 +29,6 @@ def adjust_fallback_score(
     scores: list[float],
     generated: list[int],
     function_tokens: dict[str, list[int]],
-    penalty: float,
 ) -> None:
     """Penalize a distinct fallback continuation when real choices exist."""
     fallback = function_tokens.get(FALLBACK_NAME, [])
@@ -45,7 +44,7 @@ def adjust_fallback_score(
         and ids[:n] == generated
     }
     if other_ids and fallback[n] not in other_ids:
-        scores[fallback[n]] -= penalty
+        scores[fallback[n]] -= FALLBACK_PENALTY
 
 
 def select_function(
@@ -53,8 +52,6 @@ def select_function(
     functions: list[FunctionDefinition],
     prompt: Prompt,
     function_tokens: dict[str, list[int]],
-    debug: bool = False,
-    fallback_penalty: float = 0.0,
 ) -> str:
     """Greedily choose a valid function name with masked Qwen logits."""
     input_ids = model.encode(build_prompt(functions, prompt))[0].tolist()
@@ -82,26 +79,7 @@ def select_function(
 
         logits = model.get_logits_from_input_ids(input_ids + generated)
         scores = mask_logits(logits, allowed)
-        adjust_fallback_score(
-            scores, generated, function_tokens, fallback_penalty
-        )
-
-        if debug:
-            print(f"  Selection prefix: {model.decode(generated)!r}")
-            for token_id in allowed:
-                matches = [
-                    name for name, ids in function_tokens.items()
-                    if ids[:len(generated)] == generated
-                    and len(ids) > len(generated)
-                    and ids[len(generated)] == token_id
-                ]
-                if completed and token_id == end_id:
-                    matches = completed
-                print(
-                    f"    token {token_id}: {logits[token_id]:.3f} "
-                    f"(adjusted {scores[token_id]:.3f}) "
-                    f"-> {', '.join(matches)}"
-                )
+        adjust_fallback_score(scores, generated, function_tokens)
 
         next_id = max(allowed, key=lambda token_id: scores[token_id])
         if completed and next_id == end_id:

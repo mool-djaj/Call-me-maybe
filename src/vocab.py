@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 from typing import cast
-
 from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
 
 

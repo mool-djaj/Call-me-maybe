@@ -1,9 +1,7 @@
 import json
 import math
 from pathlib import Path
-
 from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
-
 from .decoder import decode_boolean, decode_number, decode_string
 from .json_to_token import FunctionDefinition, Prompt
 from .prompt_builder import build_parameter_prompt
@@ -37,6 +35,7 @@ def extract_parameters(
                 value = float(value)
 
         elif definition.type == "string":
+            print(f"    Generating {name}...", flush=True)
             value = decode_string(model, text, vocab)
 
         elif definition.type == "boolean":

@@ -1,5 +1,4 @@
 import json
-
 from .json_to_token import FunctionDefinition, Prompt
 
 
@@ -84,22 +83,17 @@ def build_parameter_prompt(
     special_instruction = ""
     if field_type == "string":
         special_instruction = (
-            "Extract only the requested string value.\n"
-            "Preserve the original spelling, capitalization, "
-            "spaces, and special characters exactly.\n"
-            "Do not capitalize names automatically.\n"
+            "Return only this parameter's JSON string content. "
+            "Close the string after the value. "
+            "Do not generate the next parameter.\n"
+            "Preserve spelling, capitalization, and spaces when copying.\n"
         )
-
-    elif "regex" in param_name.lower() or "pattern" in param_name.lower():
-        special_instruction += (
-                    "Generate a valid, concise regular expression.\n"
-                    "Match only the text that needs replacing.\n"
-                    "Do not match the entire sentence unnecessarily.\n"
-                    "Use character classes or word"
-                    " boundaries when appropriate.\n"
-                    "Avoid unnecessary repetitions and extra characters.\n"
+        if "regex" in param_name.lower() or "pattern" in param_name.lower():
+            special_instruction += (
+                "Produce a concise regex for only what must be replaced.\n"
+                "Do not use .* to match the whole sentence unnecessarily.\n"
+                "In JSON, double backslashes in regex escapes.\n"
             )
-
     elif field_type == "boolean":
         special_instruction = "Use only JSON true or false.\n"
 

@@ -24,11 +24,8 @@ mac:
 	export HF_HUB_CACHE="$HF_HOME/hub"
 	export HF_XET_CACHE="$HF_HOME/xet"
 
-
-SET ?= public
+SET = public
 MOU_DIR = data_moulinette/$(SET)
-
-.PHONY: 
 
 moulinette:
 	cd moulinette && uv run python -m moulinette prepare_exercises \

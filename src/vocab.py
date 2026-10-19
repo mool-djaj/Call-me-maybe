@@ -12,9 +12,14 @@ def load_vocab(model: Small_LLM_Model) -> dict[str, int]:
             data: object = json.load(file)
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ValueError(f"Cannot load vocabulary: {error}") from error
-    if not isinstance(data, dict) or not all(
-        isinstance(key, str) and type(value) is int
-        for key, value in data.items()
-    ):
-        raise ValueError("Vocabulary is not a token-to-ID dictionary")
+    if not isinstance(data, dict):
+        raise ValueError("Vocabulary must be a dictionary")
+
+    for key, value in data.items():
+        if not isinstance(key, str):
+            raise ValueError("Token must be a string")
+
+        if type(value) is not int:
+            raise ValueError("Token ID must be an integer")
+
     return cast(dict[str, int], data)

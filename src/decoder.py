@@ -117,7 +117,6 @@ def decode_string(
         logits = model.get_logits_from_input_ids(input_ids + generated)
         current_text = model.decode(generated)
 
-        # The top candidate is usually valid. Do not decode all 150k tokens.
         ranked_ids = heapq.nlargest(
             256, range(len(logits)), key=logits.__getitem__
         )
@@ -129,8 +128,6 @@ def decode_string(
             if candidate_text == current_text:
                 continue
 
-            # A token such as '", regex=' contains an ending quote plus
-            # additional function-call text: stop at the quote.
             finished = completed_json_string(candidate_text)
             if finished is not None:
                 return finished
@@ -141,7 +138,6 @@ def decode_string(
             generated.append(token_id)
             break
         else:
-            # Rare fallback when no top-256 candidate is usable.
             all_ids = sorted(
                 range(len(logits)), key=logits.__getitem__, reverse=True
             )
@@ -192,7 +188,6 @@ def decode_boolean(model: Small_LLM_Model, prompt: str) -> bool:
             continue
 
         logits = model.get_logits_from_input_ids(input_ids + generated)
-        # Greedy choice among valid tokens equals masking then argmax.
         generated.append(max(allowed, key=lambda token: logits[token]))
 
     raise ValueError("Boolean generation exceeded 12 tokens")

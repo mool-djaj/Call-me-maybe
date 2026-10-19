@@ -67,7 +67,7 @@ def main() -> int:
                 print(f"  Failed: {error}", file=sys.stderr)
 
         print(f"\nCompleted: {len(prompts) - failures}/{len(prompts)}")
-        print(f"time={(time.perf_counter() - start) / 60} in min")
+        print(f"Timer: {((time.perf_counter() - start) / 60):.2f} min")
 
         if results:
             save_results(args.output, results)

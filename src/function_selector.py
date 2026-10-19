@@ -30,19 +30,31 @@ def adjust_fallback_score(
     generated: list[int],
     function_tokens: dict[str, list[int]],
 ) -> None:
-    """Penalize a distinct fallback continuation when real choices exist."""
+    """Reduce fallback score when real alternatives exist."""
+
     fallback = function_tokens.get(FALLBACK_NAME, [])
     n = len(generated)
-    if len(fallback) <= n or fallback[:n] != generated:
+
+    if len(fallback) <= n:
         return
 
-    other_ids = {
-        ids[n]
-        for name, ids in function_tokens.items()
-        if name != FALLBACK_NAME
-        and len(ids) > n
-        and ids[:n] == generated
-    }
+    if fallback[:n] != generated:
+        return
+
+    other_ids = set()
+
+    for name, ids in function_tokens.items():
+        if name == FALLBACK_NAME:
+            continue
+
+        if len(ids) <= n:
+            continue
+
+        if ids[:n] != generated:
+            continue
+
+        other_ids.add(ids[n])
+
     if other_ids and fallback[n] not in other_ids:
         scores[fallback[n]] -= FALLBACK_PENALTY
 
@@ -62,10 +74,12 @@ def select_function(
     end_id = ending[0]
 
     while True:
-        completed = [
-            name for name, ids in function_tokens.items()
-            if ids == generated
-        ]
+
+        completed = []
+        for name, ids in function_tokens.items():
+            if ids == generated:
+                completed.append(name)
+
         allowed = get_allowed_next_ids(function_tokens, generated)
         if completed and not allowed:
             return completed[0]

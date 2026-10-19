@@ -15,7 +15,7 @@ def load_candidates(
     if any(function.name == FALLBACK_NAME for function in functions):
         raise ValueError("Reserved function name: fn_unknown")
 
-    fallback = load_functions("data/input/fallback_function.json")
+    fallback = load_functions("src/fallback_function.json")
     if len(fallback) != 1 or fallback[0].name != FALLBACK_NAME:
         raise ValueError("Fallback file must contain only fn_unknown")
     if fallback[0].parameters:

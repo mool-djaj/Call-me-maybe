@@ -92,7 +92,6 @@ def completed_json_string(text: str) -> str | None:
     except json.JSONDecodeError:
         return None
 
-    # The opening quote was supplied in the prompt, not generated.
     rest = text[end - 1:].lstrip()
     if rest and rest[0] not in ',)}]':
         return None
